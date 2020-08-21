@@ -29,18 +29,30 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+/**
+ * CommitLog、ConsumeQueue会使用多个MappedFile记录数据，而使用MappedFileQueue对多个MappedFile进行统一组织。
+ * 可以把MappedFileQueue想象成逻辑上的一个大文件，只是为了存储方便而切分成多个MappedFile，所有MappedFile按序拼接起来就是这个大文件。
+ * 每个MappedFile的文件名，就是其在大文件中的起始偏移量，它应该等于前一个文件的起始偏移量+前一个文件的大小。
+ * 第一个文件的起始偏移量为0，故文件名为0。RocketMQ对文件名进行左边20位充0。文件大小通常固定为1G。
+ *
+ * 每次写数据时，都会从MappedFileQueue中获取最后一个MappedFile，如果最后一个MappedFile为空或已写满，则创建一个新的MappedFile。
+ */
 public class MappedFileQueue {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private static final InternalLogger LOG_ERROR = InternalLoggerFactory.getLogger(LoggerName.STORE_ERROR_LOGGER_NAME);
 
     private static final int DELETE_FILES_BATCH_MAX = 10;
 
+    /** MappedFile存储的父目录 */
     private final String storePath;
 
+    /** MappedFile大小，通常为1G */
     private final int mappedFileSize;
 
+    /** MappedFile列表 */
     private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
 
+    /** 创建MappedFile的服务 */
     private final AllocateMappedFileService allocateMappedFileService;
 
     private long flushedWhere = 0;
@@ -55,8 +67,8 @@ public class MappedFileQueue {
         this.allocateMappedFileService = allocateMappedFileService;
     }
 
+    /** 检查所有MappedFile的起始偏移量与文件大小是否吻合 */
     public void checkSelf() {
-
         if (!this.mappedFiles.isEmpty()) {
             Iterator<MappedFile> iterator = mappedFiles.iterator();
             MappedFile pre = null;
@@ -101,17 +113,21 @@ public class MappedFileQueue {
         return mfs;
     }
 
+    /** 将MappedFileQueue中offset后面的数据清掉 */
     public void truncateDirtyFiles(long offset) {
         List<MappedFile> willRemoveFiles = new ArrayList<MappedFile>();
 
         for (MappedFile file : this.mappedFiles) {
             long fileTailOffset = file.getFileFromOffset() + this.mappedFileSize;
             if (fileTailOffset > offset) {
+                // 是否包含offset后面的数据
                 if (offset >= file.getFileFromOffset()) {
+                    // offset正好在文件中间，即包含offset之前的数据
                     file.setWrotePosition((int) (offset % this.mappedFileSize));
                     file.setCommittedPosition((int) (offset % this.mappedFileSize));
                     file.setFlushedPosition((int) (offset % this.mappedFileSize));
                 } else {
+                    // 全部是offset之后的数据，把MappedFile销毁，并从队列中删除
                     file.destroy(1000);
                     willRemoveFiles.add(file);
                 }
@@ -191,24 +207,35 @@ public class MappedFileQueue {
         return 0;
     }
 
+    /**
+     * 获取下一个MappedFile
+     * @param startOffset 如果MappedFileQueue没有任何MappedFile，startOffset为整个大文件的起始偏移量，一般为0
+     * @param needCreate 没有MappedFile或最后一个已满时，是否创建MappedFile
+     */
     public MappedFile getLastMappedFile(final long startOffset, boolean needCreate) {
         long createOffset = -1;
         MappedFile mappedFileLast = getLastMappedFile();
 
         if (mappedFileLast == null) {
+            // startOffset所对应的MappedFile的起始偏移量
+            // 如果没有MappedFile，则第一个MappedFile的偏移量是createOffset，并不是0
             createOffset = startOffset - (startOffset % this.mappedFileSize);
         }
 
         if (mappedFileLast != null && mappedFileLast.isFull()) {
+            // 如果有MappedFile且已满，则紧接其偏移量创建下一个MappedFile
+            // createOffset = 上一个文件的起始偏移量 + 文件大小
             createOffset = mappedFileLast.getFileFromOffset() + this.mappedFileSize;
         }
 
         if (createOffset != -1 && needCreate) {
+            // 如果要创建新的MappedFile，文件名即为其起始偏移量
             String nextFilePath = this.storePath + File.separator + UtilAll.offset2FileName(createOffset);
             String nextNextFilePath = this.storePath + File.separator
                 + UtilAll.offset2FileName(createOffset + this.mappedFileSize);
             MappedFile mappedFile = null;
 
+            // 创建MappedFile
             if (this.allocateMappedFileService != null) {
                 mappedFile = this.allocateMappedFileService.putRequestAndReturnMappedFile(nextFilePath,
                     nextNextFilePath, this.mappedFileSize);
@@ -237,6 +264,7 @@ public class MappedFileQueue {
         return getLastMappedFile(startOffset, true);
     }
 
+    /** 获取MappedFileQueue里的最后一个MappedFile */
     public MappedFile getLastMappedFile() {
         MappedFile mappedFileLast = null;
 

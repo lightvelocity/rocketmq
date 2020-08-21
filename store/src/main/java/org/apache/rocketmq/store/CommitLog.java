@@ -1520,6 +1520,14 @@ public class CommitLog {
             return msgStoreItemMemory;
         }
 
+        /**
+         * 向MappedFile写入数据
+         * @param fileFromOffset 该MappedFile文件的起始偏移量
+         * @param byteBuffer MappedFile映射成的ByteBuffer，向byteBuffer写入数据即是向MappedFile写入
+         * @param maxBlank 可以写入的最大字节数
+         * @param msgInner 要写入的数据
+         * @return
+         */
         public AppendMessageResult doAppend(final long fileFromOffset, final ByteBuffer byteBuffer, final int maxBlank,
             final MessageExtBrokerInner msgInner) {
             // STORETIMESTAMP + STOREHOSTADDRESS + OFFSET <br>
@@ -1677,6 +1685,14 @@ public class CommitLog {
             return result;
         }
 
+        /**
+         * 向MappedFile写入数据
+         * @param fileFromOffset 该MappedFile文件的起始偏移量
+         * @param byteBuffer MappedFile映射成的ByteBuffer，向byteBuffer写入数据即是向MappedFile写入
+         * @param maxBlank 可以写入的最大字节数
+         * @param messageExtBatch 要写入的数据
+         * @return
+         */
         public AppendMessageResult doAppend(final long fileFromOffset, final ByteBuffer byteBuffer, final int maxBlank,
             final MessageExtBatch messageExtBatch) {
             byteBuffer.mark();
