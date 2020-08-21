@@ -20,6 +20,15 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * IndexFile头部，共40字节
+ * beginTimestamp：8字节，所包含消息的最小存储时间
+ * endTimestamp：8字节，所包含消息的最大存储时间
+ * beginPhyoffset：8字节，所包含消息在commitlog中的最小偏移量
+ * endPhyoffset：8字节，所包含消息在commitlog中的最大偏移量
+ * hasslotCount：4字节，哈希槽个数，并不是使用的个数，意义不大
+ * indexCount：4字节，index条目已使用的个数
+ */
 public class IndexHeader {
     public static final int INDEX_HEADER_SIZE = 40;
     private static int beginTimestampIndex = 0;
