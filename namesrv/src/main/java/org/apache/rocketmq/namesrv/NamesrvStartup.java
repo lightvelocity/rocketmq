@@ -47,6 +47,7 @@ public class NamesrvStartup {
     private static Properties properties = null;
     private static CommandLine commandLine = null;
 
+    // 执行mqnamesrv脚本，会启动NamesrvStartup，mqnamesrv的参数作为args传入
     public static void main(String[] args) {
         main0(args);
     }
@@ -54,7 +55,9 @@ public class NamesrvStartup {
     public static NamesrvController main0(String[] args) {
 
         try {
+            // 传入启动mqnamesrv的参数（args），创建NamesrvController
             NamesrvController controller = createNamesrvController(args);
+            // 启动NamesrvController
             start(controller);
             String tip = "The Name Server boot success. serializeType=" + RemotingCommand.getSerializeTypeConfigInThisServer();
             log.info(tip);
@@ -72,6 +75,12 @@ public class NamesrvStartup {
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
         //PackageConflictDetect.detectFastjson();
 
+        // 解析启动mqnamesrv的选项
+        // mqnamesrv的参数选项有：
+        // -h / --help：打印帮助
+        // -n / --namesrvAddr：nameserver地址列表，如192.168.0.1:9876;192.168.0.2:9876
+        // -c / --configFile：nameserver配置属性文件
+        // -p / --printConfigItem：打印nameserver所有配置项值
         Options options = ServerUtil.buildCommandlineOptions(new Options());
         commandLine = ServerUtil.parseCmdLine("mqnamesrv", args, buildCommandlineOptions(options), new PosixParser());
         if (null == commandLine) {
@@ -83,11 +92,13 @@ public class NamesrvStartup {
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
         nettyServerConfig.setListenPort(9876);
         if (commandLine.hasOption('c')) {
+            // 指定nameserver配置文件
             String file = commandLine.getOptionValue('c');
             if (file != null) {
                 InputStream in = new BufferedInputStream(new FileInputStream(file));
                 properties = new Properties();
                 properties.load(in);
+                // 从配置文件里读取NamesrvConfig和NettyServerConfig配置
                 MixAll.properties2Object(properties, namesrvConfig);
                 MixAll.properties2Object(properties, nettyServerConfig);
 
@@ -99,12 +110,14 @@ public class NamesrvStartup {
         }
 
         if (commandLine.hasOption('p')) {
+            // 打印所有的配置项值
             InternalLogger console = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_CONSOLE_NAME);
             MixAll.printObjectProperties(console, namesrvConfig);
             MixAll.printObjectProperties(console, nettyServerConfig);
             System.exit(0);
         }
 
+        // 从参数中读取nameserver配置项值
         MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), namesrvConfig);
 
         if (null == namesrvConfig.getRocketmqHome()) {
@@ -123,6 +136,7 @@ public class NamesrvStartup {
         MixAll.printObjectProperties(log, namesrvConfig);
         MixAll.printObjectProperties(log, nettyServerConfig);
 
+        // 利用配置项值创建NamesrvController
         final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
 
         // remember all configs to prevent discard
@@ -137,6 +151,7 @@ public class NamesrvStartup {
             throw new IllegalArgumentException("NamesrvController is null");
         }
 
+        // NamesrvController初始化
         boolean initResult = controller.initialize();
         if (!initResult) {
             controller.shutdown();
@@ -146,11 +161,13 @@ public class NamesrvStartup {
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
             @Override
             public Void call() throws Exception {
+                // 添加钩子，在程序退出时关闭NamesrvController
                 controller.shutdown();
                 return null;
             }
         }));
 
+        // NamesrvController启动
         controller.start();
 
         return controller;

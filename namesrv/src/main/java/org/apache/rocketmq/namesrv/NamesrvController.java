@@ -60,6 +60,7 @@ public class NamesrvController {
     private Configuration configuration;
     private FileWatchService fileWatchService;
 
+    // 第一步：创建NamesrvController
     public NamesrvController(NamesrvConfig namesrvConfig, NettyServerConfig nettyServerConfig) {
         this.namesrvConfig = namesrvConfig;
         this.nettyServerConfig = nettyServerConfig;
@@ -73,17 +74,21 @@ public class NamesrvController {
         this.configuration.setStorePathFromConfig(this.namesrvConfig, "configStorePath");
     }
 
+    // 第二步：初始化NamesrvController
     public boolean initialize() {
-
+        // 加载KV配置
         this.kvConfigManager.load();
 
+        // 创建NettyServer
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
 
+        // 创建线程池
         this.remotingExecutor =
             Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
 
         this.registerProcessor();
 
+        // 创建定时任务：清除非活跃broker
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -92,6 +97,7 @@ public class NamesrvController {
             }
         }, 5, 10, TimeUnit.SECONDS);
 
+        // 创建定时任务
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -152,7 +158,9 @@ public class NamesrvController {
         }
     }
 
+    // 第三步：启动NamesrvController
     public void start() throws Exception {
+        // 启动NettyServer
         this.remotingServer.start();
 
         if (this.fileWatchService != null) {
@@ -160,6 +168,7 @@ public class NamesrvController {
         }
     }
 
+    // 第四步：关闭NamesrvController
     public void shutdown() {
         this.remotingServer.shutdown();
         this.remotingExecutor.shutdown();
